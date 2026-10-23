@@ -67,6 +67,16 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute
 .pend .t.open{-webkit-line-clamp:unset}
 .pend .acts{display:flex;gap:8px;flex-wrap:wrap}
 .det{font-size:15px;color:var(--muted);margin-top:4px;display:none}
+.pc .tit{font-size:19px;font-weight:600;line-height:1.3;margin-top:2px}
+.pc .meta{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.4}
+.pc.feito{opacity:.75}
+details.leg{margin-top:10px}details.leg summary{font-size:15px;font-weight:600;color:var(--navy);cursor:pointer;padding:6px 0;list-style:none}
+details.leg summary::-webkit-details-marker{display:none}
+.legtxt{white-space:pre-wrap;font:inherit;font-size:15px;line-height:1.5;background:#F4F5F8;padding:12px 14px;border-radius:12px;margin-top:6px;word-break:break-word}
+details.lote>summary{list-style:none;cursor:pointer}details.lote>summary::-webkit-details-marker{display:none}
+.lotehd{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.lotehd .seta{font-size:22px;color:var(--muted);transition:transform .2s}details[open] .lotehd .seta{transform:rotate(90deg)}
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .open + .det{display:block}
 .day{font-size:22px;font-weight:600;margin:26px 4px 8px;letter-spacing:-.01em}
 .day.hj{color:var(--navy)}
@@ -197,7 +207,7 @@ function go(t){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   $('#ttl').textContent=TITULO[t];
   $('#upd').textContent='Conferido '+(CFG.checado||D.gerado_label)+' · atualiza a cada 30 min';
-  const n=D.pendencias.length;const bd=$('#bd');bd.textContent=n;bd.classList.toggle('hide',!n);
+  const n=pendN();const bd=$('#bd');bd.textContent=n;bd.classList.toggle('hide',!n);
   $('#main').innerHTML=({hoje,voce,semana,numeros,entregas})[t]();
   window.scrollTo(0,0); thumbs();
 }
@@ -225,7 +235,7 @@ function hoje(){
   const p=proximo(D.hoje);
   h+=`<h2>${esc(D.hoje_label)} · o que publica</h2>`;
   h+= D.hoje.length? D.hoje.map((x,i)=>slot(x,i===p)).join('') : `<div class="card empty">Nada programado hoje.</div>`;
-  const pend=D.pendencias.length;
+  const pend=pendN();
   if(pend) h+=`<a class="card" href="#voce" style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;background:var(--navy);color:#fff;border:0"><div><div class="big">${pend}</div><div style="opacity:.8">coisas esperam seu OK</div></div><div style="font-size:30px">›</div></a>`;
   if(D.amanha.length){h+=`<h2>Amanhã</h2>`+D.amanha.map(x=>slot(x,false)).join('');}
   return h;
@@ -233,11 +243,53 @@ function hoje(){
 
 /* ---------- precisa de você ---------- */
 function anexos(as){return (as||[]).map(a=>`<button class="btn sm ghost" data-open="${esc(a.id)}" data-tipo="${a.tipo}" data-nome="${esc(a.nome)}">${a.tipo==='video'?'▶ Ver vídeo':a.tipo==='img'?'Ver imagem':'Abrir'}</button>`).join('');}
+function pendN(){
+  const A=D.aprov;let n=D.pendencias.length;
+  if(A){A.lotes.forEach(L=>L.pecas.forEach(p=>{if(p.estado!=='ok')n++;}));A.outras.forEach(o=>{if(!o.resposta)n++;});}
+  return n;
+}
+function peca(p){
+  const ok=p.estado==='ok', aj=p.estado==='ajuste';
+  const c=[];
+  if(p.formato) c.push(`<span class="chip">${esc(p.formato)}</span>`);
+  if(/teste/i.test(p.tipo)) c.push(`<span class="chip teste">teste</span>`);
+  if(p.v5) c.push(`<span class="chip ${/^v5 pronto/.test(p.v5)?'ok':(/^v5/.test(p.v5)?'teste':'')}">${esc(p.v5)}</span>`);
+  if(ok) c.push(`<span class="chip ok">✓ seu OK${p.estado_quando?' · '+esc(p.estado_quando):''}</span>`);
+  else if(aj) c.push(`<span class="chip falta">ajuste pedido${p.estado_quando?' · '+esc(p.estado_quando):''}</span>`);
+  else c.push(`<span class="chip falta">falta seu OK</span>`);
+  const meta=[p.revisor?'Revisor: '+esc(p.revisor):'',p.rev_v5?esc(p.rev_v5):'',p.falta?'Depende de: '+esc(p.falta):''].filter(Boolean).join('<br>');
+  const leg=p.legenda?`<details class="leg"><summary>▸ ${esc(p.rotulo_legenda||'Legenda')}</summary><div class="legtxt">${esc(p.legenda)}</div><div class="opts"><button class="btn sm ghost" data-copy="${esc(p.id)}">Copiar</button></div></details>`:'';
+  return `<div class="card pc ${ok?'feito':''}"><div class="small muted" style="font-weight:600">${esc(p.quando)}</div><div class="tit">${esc(p.titulo)}</div>
+   <div class="chips">${c.join('')}</div>${meta?`<div class="meta">${meta}</div>`:''}${strip(p.midia)}${leg}
+   <div class="opts">${ok?'':`<a class="btn sm dk" href="${esc(p.tg)}" target="_blank" rel="noopener">Enviar “${esc(p.ok)}”</a>`}<a class="btn sm ghost" href="${esc(p.tg_ajuste)}" target="_blank" rel="noopener">Pedir ajuste</a></div></div>`;
+}
 function voce(){
+  const A=D.aprov;
   const ag=D.pendencias.filter(x=>x.fonte!=='Kanban'), kb=D.pendencias.filter(x=>x.fonte==='Kanban');
   const item=x=>`<div class="card pend"><div><div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
    <div class="acts"><a class="btn sm dk" href="${esc(x.tg)}" target="_blank" rel="noopener">${esc(x.rotulo||"Responder na Mesa")}</a>${anexos(x.anexos)}</div></div>`;
-  let h=`<div class="card" style="margin-top:14px"><div class="big">${D.pendencias.length}</div><div class="muted">pendências. Toque no texto para ler inteiro. O botão abre a Mesa do Dono no Telegram já escrito; você só envia.</div></div>`;
+  let h=`<div class="card" style="margin-top:14px"><div class="big">${pendN()}</div><div class="muted">coisas esperam você. Cada botão abre a Mesa do Dono no Telegram com o texto pronto; você só envia. A Mesa registra o OK e o painel marca aqui na próxima atualização (30 min).</div></div>`;
+  if(A){
+    let aberto=false;
+    A.lotes.forEach(L=>{
+      const falta=L.n-L.n_ok; const abrir=!aberto&&falta>0; if(abrir) aberto=true;
+      h+=`<details class="lote" ${abrir?'open':''}><summary><h2 class="lotehd"><span>${esc(L.rotulo)} · ${falta?falta+' sem OK':'tudo com OK'}</span><span class="seta">›</span></h2></summary>`;
+      h+=`<div class="card"><div class="big">${L.n_ok}<span class="muted" style="font-size:22px"> de ${L.n} com OK</span></div>
+        <div class="small muted" style="margin-top:8px">Reels em v5: ${L.v5_prontos} de ${L.v5_total} prontos. ${esc(L.nota)}</div>
+        <div class="opts">${falta?`<a class="btn dk" href="${esc(L.tg)}" target="_blank" rel="noopener">Enviar “${esc(L.ok)}”</a>`:''}${L.doc?anexos([L.doc]).replace('>Abrir<','>Lote completo<'):''}</div>
+        <div class="small muted" style="margin-top:8px">O OK do lote aprova todas as peças abaixo. Para tirar alguma, escreva na Mesa: “${esc(L.ok)} menos X”.</div></div>`;
+      h+=L.pecas.map(peca).join('')+`</details>`;
+    });
+    const out=A.outras;
+    if(out.length){
+      h+=`<h2>Decisões e outras pendências</h2>`;
+      h+=out.map(o=>`<div class="card pend"><div><div class="tit" style="font-size:18px;font-weight:600">${esc(o.titulo)}</div>
+        ${o.resposta?`<div class="chips"><span class="chip ok">✓ ${esc(o.resposta)}</span></div>`:''}
+        <div class="t" onclick="this.classList.toggle('open')" style="font-size:16px;color:var(--muted);margin-top:4px">${esc(o.texto)}</div></div>
+        <div class="acts">${o.link?`<a class="btn sm ghost" href="${esc(o.link[1])}" target="_blank" rel="noopener">${esc(o.link[0])}</a>`:''}
+        ${o.botoes.map(b=>`<a class="btn sm ${o.resposta?'ghost':'dk'}" href="${esc(b.tg)}" target="_blank" rel="noopener">${esc(b.rotulo)}</a>`).join('')}${anexos(o.anexos)}</div></div>`).join('');
+    }
+  }
   if(ag.length) h+=`<h2>Da agência</h2>`+ag.map(item).join('');
   if(kb.length) h+=`<h2>Cards parados esperando você</h2>`+kb.map(item).join('');
   const pr=(D.prazos||[]);
@@ -245,6 +297,10 @@ function voce(){
   h+=`<div style="margin-top:22px"><a class="btn dk" href="${esc(D.mesa)}" target="_blank" rel="noopener">Abrir a Mesa do Dono</a></div>`;
   return h;
 }
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;
+  let t='';(D.aprov?D.aprov.lotes:[]).forEach(L=>L.pecas.forEach(p=>{if(p.id===b.dataset.copy)t=p.legenda;}));
+  try{await navigator.clipboard.writeText(t);b.textContent='Copiado ✓';}catch(_){b.textContent='Não deu para copiar';}
+  setTimeout(()=>{b.textContent='Copiar';},2000);});
 
 /* ---------- semana ---------- */
 function semana(){
