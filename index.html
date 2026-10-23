@@ -265,10 +265,11 @@ function peca(p){
 }
 function voce(){
   const A=D.aprov;
-  const ag=D.pendencias.filter(x=>x.fonte!=='Kanban'), kb=D.pendencias.filter(x=>x.fonte==='Kanban');
+  const ld=D.pendencias.filter(x=>x.fonte==='Leads'), ag=D.pendencias.filter(x=>x.fonte!=='Kanban'&&x.fonte!=='Leads'), kb=D.pendencias.filter(x=>x.fonte==='Kanban');
   const item=x=>`<div class="card pend"><div><div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
    <div class="acts"><a class="btn sm dk" href="${esc(x.tg)}" target="_blank" rel="noopener">${esc(x.rotulo||"Responder na Mesa")}</a>${anexos(x.anexos)}</div></div>`;
   let h=`<div class="card" style="margin-top:14px"><div class="big">${pendN()}</div><div class="muted">coisas esperam você. Cada botão abre a Mesa do Dono no Telegram com o texto pronto; você só envia. A Mesa registra o OK e o painel marca aqui na próxima atualização (30 min).</div></div>`;
+  if(ld.length) h+=`<h2>Médicos esperando resposta</h2>`+ld.map(item).join('');
   if(A){
     let aberto=false;
     A.lotes.forEach(L=>{
