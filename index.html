@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Painel">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; frame-src blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://ejsdbjfqdnoxblpygauc.supabase.co">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Painel</title>
@@ -182,6 +182,7 @@ async function unlock(pw,silent){
     if(pw){const raw=await crypto.subtle.exportKey('raw',KEY);localStorage.setItem('pj_k',JSON.stringify({s:CFG.salt,k:b64e(raw)}));}
     $('#lock').classList.add('hide');$('#app').classList.remove('hide');
     go(location.hash.replace('#','')||'hoje');
+    sbStart();
   }catch(e){
     KEY=null;
     if(!silent) msg.textContent=(e.message==='rede')?'Sem conexão. Tente de novo.':'Senha não confere.';
@@ -196,7 +197,7 @@ async function boot(){
   if(s&&s.s===CFG.salt){KEY=await crypto.subtle.importKey('raw',b64d(s.k),{name:'AES-GCM'},false,['decrypt']);await unlock(null,true);}
 }
 $('#f').addEventListener('submit',e=>{e.preventDefault();unlock($('#pw').value);});
-$('#rf').addEventListener('click',async()=>{$('#rf').textContent='…';try{CFG=await cfg();await loadData();go(TAB);}catch(e){alert('Não deu para atualizar agora.');}$('#rf').textContent='↻';});
+$('#rf').addEventListener('click',async()=>{$('#rf').textContent='…';try{CFG=await cfg();await loadData();SB.base=null;if(SB.on){SB.rows=[];SB.last=0;await sbPoll(true);}go(TAB);}catch(e){alert('Não deu para atualizar agora.');}$('#rf').textContent='↻';});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)go(b.dataset.t);});
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(1);if(D&&t&&t!==TAB)go(t);});
 
@@ -206,7 +207,7 @@ function go(t){
   if(location.hash!=='#'+t) history.replaceState(null,'','#'+t);
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   $('#ttl').textContent=TITULO[t];
-  $('#upd').textContent='Conferido '+(CFG.checado||D.gerado_label)+' · atualiza a cada 30 min';
+  $('#upd').textContent='Conferido '+(CFG.checado||D.gerado_label)+(SB.vivo?' · seus OKs ao vivo':' · atualiza a cada 30 min');
   const n=pendN();const bd=$('#bd');bd.textContent=n;bd.classList.toggle('hide',!n);
   $('#main').innerHTML=({hoje,voce,semana,numeros,entregas})[t]();
   window.scrollTo(0,0); thumbs();
@@ -261,14 +262,14 @@ function peca(p){
   const leg=p.legenda?`<details class="leg"><summary>▸ ${esc(p.rotulo_legenda||'Legenda')}</summary><div class="legtxt">${esc(p.legenda)}</div><div class="opts"><button class="btn sm ghost" data-copy="${esc(p.id)}">Copiar</button></div></details>`:'';
   return `<div class="card pc ${ok?'feito':''}"><div class="small muted" style="font-weight:600">${esc(p.quando)}</div><div class="tit">${esc(p.titulo)}</div>
    <div class="chips">${c.join('')}</div>${meta?`<div class="meta">${meta}</div>`:''}${strip(p.midia)}${leg}
-   <div class="opts">${ok?'':`<a class="btn sm dk" href="${esc(p.tg)}" target="_blank" rel="noopener">Enviar “${esc(p.ok)}”</a>`}<a class="btn sm ghost" href="${esc(p.tg_ajuste)}" target="_blank" rel="noopener">Pedir ajuste</a></div></div>`;
+   <div class="opts">${ok?'':sbBtn('btn sm dk',{p_peca:p.id,p_acao:'OK',p_lote:p.lote},p.tg,SB.on?'OK':'Enviar “'+p.ok+'”')}${sbBtn('btn sm ghost',{p_peca:p.id,p_acao:'AJUSTE',p_lote:p.lote},p.tg_ajuste,'Pedir ajuste',1)}</div></div>`;
 }
 function voce(){
   const A=D.aprov;
   const ld=D.pendencias.filter(x=>x.fonte==='Leads'), ag=D.pendencias.filter(x=>x.fonte!=='Kanban'&&x.fonte!=='Leads'), kb=D.pendencias.filter(x=>x.fonte==='Kanban');
   const item=x=>`<div class="card pend"><div><div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
    <div class="acts"><a class="btn sm dk" href="${esc(x.tg)}" target="_blank" rel="noopener">${esc(x.rotulo||"Responder na Mesa")}</a>${anexos(x.anexos)}</div></div>`;
-  let h=`<div class="card" style="margin-top:14px"><div class="big">${pendN()}</div><div class="muted">coisas esperam você. Cada botão abre a Mesa do Dono no Telegram com o texto pronto; você só envia. A Mesa registra o OK e o painel marca aqui na próxima atualização (30 min).</div></div>`;
+  let h=`<div class="card" style="margin-top:14px"><div class="big">${pendN()}</div><div class="muted">coisas esperam você. ${SB.on?'Toque em OK: grava na hora, e a Mesa e o Conteúdo recebem em até 2 min. OK dado no Telegram também aparece aqui sozinho.':'Cada botão abre a Mesa do Dono no Telegram com o texto pronto; você só envia. A Mesa registra o OK e o painel marca aqui.'}</div></div>`;
   if(ld.length) h+=`<h2>Médicos esperando resposta</h2>`+ld.map(item).join('');
   if(A){
     let aberto=false;
@@ -277,8 +278,8 @@ function voce(){
       h+=`<details class="lote" ${abrir?'open':''}><summary><h2 class="lotehd"><span>${esc(L.rotulo)} · ${falta?falta+' sem OK':'tudo com OK'}</span><span class="seta">›</span></h2></summary>`;
       h+=`<div class="card"><div class="big">${L.n_ok}<span class="muted" style="font-size:22px"> de ${L.n} com OK</span></div>
         <div class="small muted" style="margin-top:8px">Reels em v5: ${L.v5_prontos} de ${L.v5_total} prontos. ${esc(L.nota)}</div>
-        <div class="opts">${falta?`<a class="btn dk" href="${esc(L.tg)}" target="_blank" rel="noopener">Enviar “${esc(L.ok)}”</a>`:''}${L.doc?anexos([L.doc]).replace('>Abrir<','>Lote completo<'):''}</div>
-        <div class="small muted" style="margin-top:8px">O OK do lote aprova todas as peças abaixo. Para tirar alguma, escreva na Mesa: “${esc(L.ok)} menos X”.</div></div>`;
+        <div class="opts">${falta?sbBtn('btn dk',{p_peca:'LOTE',p_acao:'OK',p_lote:L.semana},L.tg,SB.on?'OK no lote inteiro':'Enviar “'+L.ok+'”'):''}${L.doc?anexos([L.doc]).replace('>Abrir<','>Lote completo<'):''}</div>
+        <div class="small muted" style="margin-top:8px">O OK do lote aprova todas as peças abaixo. Para tirar alguma, dê OK peça por peça ou escreva na Mesa: “${esc(L.ok)} menos X”.</div></div>`;
       h+=L.pecas.map(peca).join('')+`</details>`;
     });
     const out=A.outras;
@@ -288,7 +289,7 @@ function voce(){
         ${o.resposta?`<div class="chips"><span class="chip ok">✓ ${esc(o.resposta)}</span></div>`:''}
         <div class="t" onclick="this.classList.toggle('open')" style="font-size:16px;color:var(--muted);margin-top:4px">${esc(o.texto)}</div></div>
         <div class="acts">${o.link?`<a class="btn sm ghost" href="${esc(o.link[1])}" target="_blank" rel="noopener">${esc(o.link[0])}</a>`:''}
-        ${o.botoes.map(b=>`<a class="btn sm ${o.resposta?'ghost':'dk'}" href="${esc(b.tg)}" target="_blank" rel="noopener">${esc(b.rotulo)}</a>`).join('')}${anexos(o.anexos)}</div></div>`).join('');
+        ${o.botoes.map(b=>b.sb?sbBtn('btn sm '+(o.resposta?'ghost':'dk'),b.sb,b.tg,b.rotulo,b.sb.p_acao==='AJUSTE'?1:0):`<a class="btn sm ${o.resposta?'ghost':'dk'}" href="${esc(b.tg)}" target="_blank" rel="noopener">${esc(b.rotulo)}</a>`).join('')}${anexos(o.anexos)}</div></div>`).join('');
     }
   }
   if(ag.length) h+=`<h2>Da agência</h2>`+ag.map(item).join('');
@@ -302,6 +303,86 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy
   let t='';(D.aprov?D.aprov.lotes:[]).forEach(L=>L.pecas.forEach(p=>{if(p.id===b.dataset.copy)t=p.legenda;}));
   try{await navigator.clipboard.writeText(t);b.textContent='Copiado ✓';}catch(_){b.textContent='Não deu para copiar';}
   setTimeout(()=>{b.textContent='Copiar';},2000);});
+
+/* ---------- aprovações ao vivo (Supabase, card t_4b86720b) ---------- */
+const SB={on:false,vivo:false,rows:[],last:0,base:null,t:null,busy:false};
+const nz=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function sbBtn(cls,args,tg,rot,ajuste){
+  if(!SB.on) return `<a class="${cls}" href="${esc(tg)}" target="_blank" rel="noopener">${esc(rot)}</a>`;
+  return `<button class="${cls}" data-sb="${esc(JSON.stringify(args))}" data-tg="${esc(tg)}" data-aj="${ajuste?1:''}">${esc(rot)}</button>`;
+}
+async function sbRpc(fn,args){
+  const r=await fetch(D.sb.url+'/rest/v1/rpc/'+fn,{method:'POST',cache:'no-store',headers:{apikey:D.sb.key,'Content-Type':'application/json'},body:JSON.stringify(Object.assign({p_token:D.sb.token},args))});
+  if(!r.ok) throw new Error('sb '+r.status);
+  return r.json();
+}
+function hm(iso){const d=new Date(iso);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0');}
+function sbAplicar(){
+  if(!D.aprov) return;
+  if(!SB.base) SB.base=JSON.stringify(D.aprov);      // estado do build (arquivo OKS_DO_JORGE.md); o banco vem por cima
+  const B=JSON.parse(SB.base); D.aprov=B;
+  SB.rows.slice().sort((a,b)=>a.id-b.id).forEach(r=>{
+    const q=hm(r.quando)+(r.origem==='painel'?' · app':' · Telegram');
+    if(r.peca==='LOTE'){
+      B.lotes.forEach(L=>{if(L.semana!==r.lote) return;
+        const menos=new Set(String(r.opcao||'').split(/[,;\s]+/).filter(Boolean).map(nz));
+        L.pecas.forEach(p=>{if(!menos.has(nz(p.id))){p.estado='ok';p.estado_quando=q;}});});
+      return;
+    }
+    let achou=false;
+    B.lotes.forEach(L=>L.pecas.forEach(p=>{if(nz(p.id)===nz(r.peca)){achou=true;p.estado=(r.acao==='AJUSTE')?'ajuste':(r.acao==='OK'?'ok':'');p.estado_quando=q;}}));
+    if(!achou) B.outras.forEach(o=>{if(nz(o.id)===nz(r.peca)) o.resposta=q+' · '+r.texto;});
+  });
+  B.lotes.forEach(L=>{L.n_ok=L.pecas.filter(p=>p.estado==='ok').length;});
+}
+function sbRender(){
+  if(!D) return;
+  const y=window.scrollY, ab=[...document.querySelectorAll('#main details')].map(d=>d.open);
+  const n=pendN();const bd=$('#bd');bd.textContent=n;bd.classList.toggle('hide',!n);
+  if(TAB==='voce'||TAB==='hoje'){
+    $('#main').innerHTML=({hoje,voce})[TAB]();
+    document.querySelectorAll('#main details').forEach((d,i)=>{if(i<ab.length) d.open=ab[i];});
+    window.scrollTo(0,y); thumbs();
+  }
+  $('#upd').textContent='Conferido '+(CFG.checado||D.gerado_label)+(SB.vivo?' · seus OKs ao vivo':' · atualiza a cada 30 min');
+}
+async function sbPoll(silencioso){
+  if(!SB.on||SB.busy) return;
+  SB.busy=true;
+  try{
+    const novas=await sbRpc('listar_aprovacoes',{p_desde:SB.last});
+    const era=SB.vivo; SB.vivo=true;
+    novas.forEach(r=>{if(!SB.rows.some(x=>x.id===r.id)) SB.rows.push(r);SB.last=Math.max(SB.last,r.id);});
+    if(novas.length||silencioso){sbAplicar(); if(!silencioso) sbRender();}
+    else if(!era&&!silencioso) sbRender();
+  }catch(e){SB.vivo=false;}
+  SB.busy=false;
+}
+function sbStart(){
+  SB.on=!!(D&&D.sb&&D.sb.token); if(!SB.on) return;
+  SB.base=null; SB.rows=[]; SB.last=0;
+  sbPoll(true).then(()=>{sbRender();});
+  clearInterval(SB.t); SB.t=setInterval(()=>{if(document.visibilityState==='visible') sbPoll();},5000);
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') sbPoll();});
+function toast(t){let el=$('#toast');if(!el){el=document.createElement('div');el.id='toast';el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));background:#0d1c3d;color:#fff;padding:12px 18px;border-radius:12px;font-size:16px;z-index:99;max-width:90vw;text-align:center';document.body.appendChild(el);}
+  el.textContent=t;el.classList.remove('hide');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.add('hide'),2600);}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-sb]'); if(!b) return;
+  e.preventDefault();
+  const args=JSON.parse(b.dataset.sb);
+  if(b.dataset.aj){const t=prompt('O que mudar?');if(t===null) return; if(!t.trim()){toast('Escreva o que mudar.');return;} args.p_opcao=t.trim().slice(0,300);}
+  const rot=b.textContent; b.disabled=true; b.textContent='Gravando…';
+  try{
+    const r=await sbRpc('registrar_aprovacao',args);
+    if(!SB.rows.some(x=>x.id===r.id)) SB.rows.push(r);
+    SB.last=Math.max(SB.last,r.id); SB.vivo=true; sbAplicar(); sbRender();
+    toast(r.acao==='AJUSTE'?'Ajuste registrado ✓':(r.acao==='OK'?'Aprovado ✓':'Registrado ✓'));
+  }catch(err){
+    b.disabled=false; b.textContent=rot;
+    if(confirm('Sem conexão com o banco agora. Mandar pela Mesa do Dono no Telegram?')) window.open(b.dataset.tg,'_blank','noopener');
+  }
+});
 
 /* ---------- semana ---------- */
 function semana(){
