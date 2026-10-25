@@ -70,6 +70,7 @@ h2{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute
 .pc .tit{font-size:19px;font-weight:600;line-height:1.3;margin-top:2px}
 .pc .meta{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.4}
 .pc.feito{opacity:.75}
+.card.venc{border-left:5px solid var(--warn)}
 details.leg{margin-top:10px}details.leg summary{font-size:15px;font-weight:600;color:var(--navy);cursor:pointer;padding:6px 0;list-style:none}
 details.leg summary::-webkit-details-marker{display:none}
 .legtxt{white-space:pre-wrap;font:inherit;font-size:15px;line-height:1.5;background:#F4F5F8;padding:12px 14px;border-radius:12px;margin-top:6px;word-break:break-word}
@@ -244,10 +245,65 @@ function hoje(){
 
 /* ---------- precisa de você ---------- */
 function anexos(as){return (as||[]).map(a=>`<button class="btn sm ghost" data-open="${esc(a.id)}" data-tipo="${a.tipo}" data-nome="${esc(a.nome)}">${a.tipo==='video'?'▶ Ver vídeo':a.tipo==='img'?'Ver imagem':'Abrir'}</button>`).join('');}
-function pendN(){
-  const A=D.aprov;let n=D.pendencias.length;
-  if(A){A.lotes.forEach(L=>L.pecas.forEach(p=>{if(p.estado!=='ok')n++;}));A.outras.forEach(o=>{if(!o.resposta)n++;});}
-  return n;
+function pendN(){return filaVoce().abertos.length+D.pendencias.filter(x=>x.fonte==='Leads').length;}
+/* ---------- aba Você = só o que falta, por data (card t_c4c36a4b) ---------- */
+function prazoMs(s){if(!s) return Infinity; const t=s.indexOf('T')>0?s:s+'T23:59'; const d=new Date(t); return isNaN(d)?Infinity:d.getTime();}
+function filaVoce(){
+  const A=D.aprov, abertos=[], feitos=[], lotesOk=[];
+  if(A){
+    A.lotes.forEach(L=>{
+      const pend=L.pecas.filter(p=>p.estado!=='ok');
+      if(!pend.length){lotesOk.push(L);return;}
+      pend.forEach(p=>abertos.push({k:'peca',p,ms:prazoMs(p.data?(p.data+'T'+(p.hora||'23:59')):''),lab:p.quando}));
+      feitos.push(...L.pecas.filter(p=>p.estado==='ok').map(p=>({k:'peca',p,ms:0,lab:p.quando})));
+    });
+    A.outras.forEach(o=>{(o.resposta?feitos:abertos).push({k:'outra',o,ms:prazoMs(o.prazo),lab:o.prazo_label||'sem prazo'});});
+  }
+  D.pendencias.filter(x=>x.fonte!=='Leads').forEach(x=>abertos.push({k:'pend',x,ms:Infinity,lab:'sem prazo'}));
+  abertos.sort((a,b)=>a.ms-b.ms);
+  return {abertos,feitos,lotesOk};
+}
+function balde(ms){
+  if(ms===Infinity) return 'Sem prazo';
+  const now=new Date(), d=new Date(ms), d0=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(ms<now.getTime()) return 'Vencidas';
+  const dias=Math.floor((new Date(d.getFullYear(),d.getMonth(),d.getDate())-d0)/864e5);
+  return dias===0?'Hoje':dias===1?'Amanhã':dias<=7?'Próximos 7 dias':'Depois';
+}
+function itemFila(it,venc){
+  const red=venc?'color:var(--warn)':'';
+  const prz=`<div class="small" style="font-weight:700;${red||'color:var(--muted)'}">${venc?'⚠ venceu · ':''}${esc(it.lab)}</div>`;
+  if(it.k==='peca') return peca(it.p).replace('<div class="card pc ','<div class="card pc '+(venc?'venc ':''));
+  if(it.k==='pend'){const x=it.x;return `<div class="card pend"><div>${prz}<div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
+   <div class="acts"><a class="btn sm dk" href="${esc(x.tg)}" target="_blank" rel="noopener">${esc(x.rotulo||"Responder na Mesa")}</a>${anexos(x.anexos)}</div></div>`;}
+  const o=it.o;
+  const chip=o.tipo==='feito'?'<span class="chip">você faz</span>':'<span class="chip falta">seu OK</span>';
+  return `<div class="card pend ${venc?'venc':''}" data-item="${esc(o.id)}"><div>${prz}<div class="tit" style="font-size:19px;font-weight:600;line-height:1.3;margin-top:2px">${esc(o.titulo)}</div>
+    <div class="chips">${chip}${o.card?`<span class="chip">${esc(o.card)}</span>`:''}</div>
+    ${o.acao?`<div style="font-size:16px;margin-top:4px"><b>Você:</b> ${esc(o.acao)}</div>`:''}
+    ${o.texto?`<div class="t" onclick="this.classList.toggle('open')" style="font-size:15px;color:var(--muted);margin-top:4px">${esc(o.texto)}</div>`:''}</div>
+    <div class="acts">${o.link?`<a class="btn sm ghost" href="${esc(o.link[1])}" target="_blank" rel="noopener">${esc(o.link[0])}</a>`:''}
+    ${o.botoes.map(b=>b.sb?sbBtn('btn sm '+(b.sb.p_acao==='AJUSTE'||b.sb.p_acao==='NÃO'?'ghost':'dk'),b.sb,b.tg,b.rotulo,b.sb.p_acao==='AJUSTE'?1:0):`<a class="btn sm ghost" href="${esc(b.tg)}" target="_blank" rel="noopener">${esc(b.rotulo)}</a>`).join('')}${anexos(o.anexos)}</div></div>`;
+}
+function voce(){
+  const F=filaVoce(), ld=D.pendencias.filter(x=>x.fonte==='Leads');
+  const item=x=>`<div class="card pend"><div><div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
+   <div class="acts"><a class="btn sm dk" href="${esc(x.tg)}" target="_blank" rel="noopener">${esc(x.rotulo||"Responder na Mesa")}</a>${anexos(x.anexos)}</div></div>`;
+  const nv=F.abertos.filter(it=>balde(it.ms)==='Vencidas').length;
+  let h=`<div class="card" style="margin-top:14px"><div class="big">${F.abertos.length+ld.length}<span class="muted" style="font-size:20px"> faltam${nv?` · <span style="color:var(--warn)">${nv} vencidas</span>`:''}</span></div><div class="muted small" style="margin-top:6px">Só o que falta, por prazo. ${SB.on?'Tocou OK ou Feito: grava na hora, sai da lista e a Mesa recebe em até 2 min.':'Cada botão abre a Mesa no Telegram com o texto pronto.'}</div></div>`;
+  if(ld.length) h+=`<h2 style="color:var(--warn)">Médicos esperando resposta</h2>`+ld.map(item).join('');
+  let atual='';
+  F.abertos.forEach(it=>{const b=balde(it.ms); if(b!==atual){atual=b;h+=`<h2${b==='Vencidas'?' style="color:var(--warn)"':''}>${b}</h2>`;} h+=itemFila(it,b==='Vencidas');});
+  if(!F.abertos.length&&!ld.length) h+=`<div class="card empty">Nada esperando você. ✓</div>`;
+  const nf=F.feitos.filter(x=>x.k==='outra').length+F.lotesOk.length;
+  if(nf){
+    h+=`<details class="lote" style="margin-top:26px"><summary><h2 class="lotehd"><span>Já respondidos · ${nf}</span><span class="seta">›</span></h2></summary>`;
+    h+=F.feitos.filter(x=>x.k==='outra').sort((a,b)=>String(b.o.resposta).localeCompare(String(a.o.resposta))).map(x=>`<div class="row3"><div class="h small" style="color:var(--ok)">✓</div><div><div class="p">${esc(x.o.titulo)}</div><div class="small muted">${esc(x.o.resposta)}</div></div></div>`).join('');
+    h+=F.lotesOk.map(L=>`<div class="row3"><div class="h small" style="color:var(--ok)">✓</div><div><div class="p">${esc(L.rotulo)}</div><div class="small muted">${L.n} de ${L.n} peças com OK</div></div></div>`).join('');
+    h+=`</details>`;
+  }
+  h+=`<div style="margin-top:22px"><a class="btn dk" href="${esc(D.mesa)}" target="_blank" rel="noopener">Abrir a Mesa do Dono</a></div>`;
+  return h;
 }
 function peca(p){
   const ok=p.estado==='ok', aj=p.estado==='ajuste';
@@ -264,7 +320,7 @@ function peca(p){
    <div class="chips">${c.join('')}</div>${meta?`<div class="meta">${meta}</div>`:''}${strip(p.midia)}${leg}
    <div class="opts">${ok?'':sbBtn('btn sm dk',{p_peca:p.id,p_acao:'OK',p_lote:p.lote},p.tg,SB.on?'OK':'Enviar “'+p.ok+'”')}${sbBtn('btn sm ghost',{p_peca:p.id,p_acao:'AJUSTE',p_lote:p.lote},p.tg_ajuste,'Pedir ajuste',1)}</div></div>`;
 }
-function voce(){
+function voceAntigo(){
   const A=D.aprov;
   const ld=D.pendencias.filter(x=>x.fonte==='Leads'), ag=D.pendencias.filter(x=>x.fonte!=='Kanban'&&x.fonte!=='Leads'), kb=D.pendencias.filter(x=>x.fonte==='Kanban');
   const item=x=>`<div class="card pend"><div><div class="t" onclick="this.classList.toggle('open')">${esc(x.texto)}</div>${x.detalhe?`<div class="det">${esc(x.detalhe)}</div>`:''}</div>
@@ -327,6 +383,7 @@ function sbAplicar(){
       B.lotes.forEach(L=>{if(L.semana!==r.lote) return;
         const menos=new Set(String(r.opcao||'').split(/[,;\s]+/).filter(Boolean).map(nz));
         L.pecas.forEach(p=>{if(!menos.has(nz(p.id))){p.estado='ok';p.estado_quando=q;}});});
+      B.outras.forEach(o=>{if(o.lote&&o.lote===r.lote) o.resposta=q+' · '+r.texto;});
       return;
     }
     let achou=false;
