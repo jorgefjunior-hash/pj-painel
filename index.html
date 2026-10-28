@@ -281,7 +281,7 @@ function itemFila(it,venc){
   return `<div class="card pend ${venc?'venc':''}" data-item="${esc(o.id)}"><div>${prz}<div class="tit" style="font-size:19px;font-weight:600;line-height:1.3;margin-top:2px">${esc(o.titulo)}</div>
     <div class="chips">${chip}${o.card?`<span class="chip">${esc(o.card)}</span>`:''}</div>
     ${o.acao?`<div style="font-size:16px;margin-top:4px"><b>Você:</b> ${esc(o.acao)}</div>`:''}
-    ${o.texto?`<div class="t" onclick="this.classList.toggle('open')" style="font-size:15px;color:var(--muted);margin-top:4px">${esc(o.texto)}</div>`:''}</div>
+    ${o.texto?(o.vnd?`<div class="t open" style="font-size:16px;color:var(--ink,#0d1c3d);margin-top:6px;white-space:pre-line;background:#f4f6fa;border-radius:10px;padding:10px">${esc(o.texto)}</div>`:`<div class="t" onclick="this.classList.toggle('open')" style="font-size:15px;color:var(--muted);margin-top:4px">${esc(o.texto)}</div>`):''}</div>
     <div class="acts">${o.link?`<a class="btn sm ghost" href="${esc(o.link[1])}" target="_blank" rel="noopener">${esc(o.link[0])}</a>`:''}
     ${o.botoes.map(b=>b.sb?sbBtn('btn sm '+(b.sb.p_acao==='AJUSTE'||b.sb.p_acao==='NÃO'?'ghost':'dk'),b.sb,b.tg,b.rotulo,b.sb.p_acao==='AJUSTE'?1:0):`<a class="btn sm ghost" href="${esc(b.tg)}" target="_blank" rel="noopener">${esc(b.rotulo)}</a>`).join('')}${anexos(o.anexos)}</div></div>`;
 }
@@ -388,7 +388,7 @@ function sbAplicar(){
     }
     let achou=false;
     B.lotes.forEach(L=>L.pecas.forEach(p=>{if(nz(p.id)===nz(r.peca)){achou=true;p.estado=(r.acao==='AJUSTE')?'ajuste':(r.acao==='OK'?'ok':'');p.estado_quando=q;}}));
-    if(!achou) B.outras.forEach(o=>{if(nz(o.id)===nz(r.peca)) o.resposta=q+' · '+r.texto;});
+    if(!achou) B.outras.forEach(o=>{if(nz(o.id)===nz(r.peca)&&!(o.desde&&new Date(r.quando)<new Date(o.desde))) o.resposta=q+' · '+r.texto;});  // VND: OK de rascunho anterior não vale
   });
   B.lotes.forEach(L=>{L.n_ok=L.pecas.filter(p=>p.estado==='ok').length;});
 }
